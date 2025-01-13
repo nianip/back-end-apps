@@ -1,5 +1,6 @@
 <?php
-// Koneksi ke database
+header("Content-Type: application/json");
+
 $serverName = "localhost";
 $userName = "root";
 $password = "";
@@ -8,99 +9,41 @@ $dbName = "uas";
 $conn = new mysqli($serverName, $userName, $password, $dbName);
 
 if ($conn->connect_error) {
-    die("Koneksi gagal: " . $conn->connect_error);
+    echo json_encode(["success" => false, "message" => "Koneksi gagal: " . $conn->connect_error]);
+    exit;
 }
 
-// Fungsi untuk membaca input CLI
-function readInput($prompt) {
-    echo $prompt;
-    return trim(fgets(STDIN));
+$data = json_decode(file_get_contents("php://input"), true);
+
+if (
+    empty($data['id_user']) ||
+    empty($data['id_lapangan']) ||
+    empty($data['tanggal_booking']) ||
+    empty($data['jam_booking']) ||
+    empty($data['nama_pembooking'])
+) {
+    echo json_encode(["success" => false, "message" => "Semua field wajib diisi."]);
+    exit;
 }
 
-// Fungsi untuk menambahkan transaksi
-function addTransaction($conn) {
-    echo "=== Tambah Transaksi Baru ===\n";
+$id_user = $data['id_user'];
+$id_lapangan = $data['id_lapangan'];
+$tanggal_booking = $data['tanggal_booking'];
+$jam_booking = $data['jam_booking'];
+$nama_pembooking = $data['nama_pembooking'];
+$catatan = isset($data['catatan']) ? $data['catatan'] : null;
 
-    $id_user = (int)readInput("Masukkan ID User: ");
-    $id_lapangan = (int)readInput("Masukkan ID Lapangan: ");
-    $tanggal_booking = readInput("Masukkan Tanggal Booking (YYYY-MM-DD): ");
-    $jam_mulai = readInput("Masukkan Jam Mulai (HH:MM:SS): ");
-    $jam_selesai = readInput("Masukkan Jam Selesai (HH:MM:SS): ");
+$sql = "INSERT INTO transaksi (id_user, id_lapangan, tanggal_booking, jam_booking, nama_pembooking, catatan) 
+        VALUES (?, ?, ?, ?, ?, ?)";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("iissss", $id_user, $id_lapangan, $tanggal_booking, $jam_booking, $nama_pembooking, $catatan);
 
-    $userExists = $conn->query("SELECT id FROM users WHERE id = $id_user")->num_rows > 0;
-    $lapanganExists = $conn->query("SELECT id FROM tempat WHERE id = $id_lapangan")->num_rows > 0;
-
-    if (!$userExists) {
-        echo "Error: ID User tidak ditemukan.\n";
-        return;
-    }
-    if (!$lapanganExists) {
-        echo "Error: ID Lapangan tidak ditemukan.\n";
-        return;
-    }
-
-    $sql = "INSERT INTO transaksi (id_user, id_lapangan, tanggal_booking, jam_mulai, jam_selesai)
-            VALUES (?, ?, ?, ?, ?)";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iisss", $id_user, $id_lapangan, $tanggal_booking, $jam_mulai, $jam_selesai);
-
-    if ($stmt->execute()) {
-        echo "Transaksi berhasil ditambahkan!\n";
-    } else {
-        echo "Error: " . $stmt->error . "\n";
-    }
-
-    $stmt->close();
+if ($stmt->execute()) {
+    echo json_encode(["success" => true, "message" => "Booking berhasil disimpan."]);
+} else {
+    echo json_encode(["success" => false, "message" => "Terjadi kesalahan saat menyimpan booking: " . $stmt->error]);
 }
 
-// Fungsi untuk menampilkan semua transaksi
-function showTransactions($conn) {
-    echo "=== Daftar Transaksi ===\n";
-
-    $result = $conn->query("SELECT * FROM transaksi");
-    if ($result->num_rows > 0) {
-        while ($row = $result->fetch_assoc()) {
-            echo "ID Transaksi: " . $row['id'] . "\n";
-            echo "ID User: " . $row['id_user'] . "\n";
-            echo "ID Lapangan: " . $row['id_lapangan'] . "\n";
-            echo "Tanggal Booking: " . $row['tanggal_booking'] . "\n";
-            echo "Jam Mulai: " . $row['jam_mulai'] . "\n";
-            echo "Jam Selesai: " . $row['jam_selesai'] . "\n";
-            echo "-----------------------------\n";
-        }
-    } else {
-        echo "Tidak ada transaksi.\n";
-    }
-}
-
-// Menu utama
-function main($conn) {
-    echo "=== Aplikasi Booking Lapangan ===\n";
-    echo "1. Tambah Transaksi\n";
-    echo "2. Tampilkan Transaksi\n";
-    echo "0. Keluar\n";
-
-    $choice = (int)readInput("Pilih menu: ");
-    switch ($choice) {
-        case 1:
-            addTransaction($conn);
-            break;
-        case 2:
-            showTransactions($conn);
-            break;
-        case 0:
-            echo "Keluar dari aplikasi.\n";
-            exit;
-        default:
-            echo "Pilihan tidak valid.\n";
-    }
-}
-
-// Jalankan aplikasi
-while (true) {
-    main($conn);
-}
-
-// Tutup koneksi
+$stmt->close();
 $conn->close();
 ?>

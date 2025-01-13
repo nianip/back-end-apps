@@ -1,30 +1,24 @@
 <?php
-// Set headers before any output to avoid issues
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type");
 header('Content-Type: application/json');
 
-// Konfigurasi koneksi database
 $serverName = "localhost";
-$username = "root"; // Sesuaikan dengan user database Anda
-$password = "";     // Sesuaikan dengan password database Anda
-$dbName = "uas"; // Nama database Anda
+$username = "root";
+$password = ""; 
+$dbName = "uas"; 
 
-// Membuat koneksi
 $conn = new mysqli($serverName, $username, $password, $dbName);
 
-// Periksa koneksi
 if ($conn->connect_error) {
     die(json_encode(["error" => "Koneksi gagal: " . $conn->connect_error]));
 }
 
-// Fungsi untuk menampilkan semua lapangan
 function showAllFields($conn) {
-    $result = $conn->query("SELECT * FROM tempat ");
+    $result = $conn->query("SELECT * FROM tempat");
     $lapangan = [];
 
-    // Periksa apakah ada data dalam database
     if ($result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
             $lapangan[] = [
@@ -37,160 +31,99 @@ function showAllFields($conn) {
                 'harga' => $row['harga']
             ];
         }
+        echo json_encode($lapangan);
     } else {
         echo json_encode(["message" => "Tidak ada data lapangan."]);
+    }
+}
+
+function getFieldById($conn, $id) {
+    $stmt = $conn->prepare("SELECT * FROM tempat WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $data = $result->fetch_assoc();
+    echo json_encode($data);
+    $stmt->close();
+}
+
+function addField($conn) {
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    if (!isset($data['nama_lapangan'], $data['alamat'], $data['deskripsi'], $data['ukuran'], $data['kapasitas'], $data['harga'])) {
+        echo json_encode(["error" => "Data tidak lengkap"]);
         return;
     }
 
-    // Kembalikan data dalam format JSON
-    echo json_encode($lapangan);
+    $stmt = $conn->prepare("INSERT INTO tempat (nama_lapangan, alamat, deskripsi, ukuran_lapangan, kapasitas_lapangan, harga) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssid", $data['nama_lapangan'], $data['alamat'], $data['deskripsi'], $data['ukuran'], $data['kapasitas'], $data['harga']);
+
+    if ($stmt->execute()) {
+        echo json_encode(["message" => "Lapangan berhasil ditambahkan"]);
+    } else {
+        echo json_encode(["error" => "Gagal menambahkan lapangan"]);
+    }
+    $stmt->close();
 }
 
-// Panggil fungsi untuk menampilkan data lapangan
-showAllFields($conn);
+function editField($conn) {
+    $data = json_decode(file_get_contents('php://input'), true);
 
-// Tutup koneksi setelah selesai
+    if (!isset($data['id'], $data['nama_lapangan'], $data['alamat'], $data['deskripsi'], $data['ukuran'], $data['kapasitas'], $data['harga'])) {
+        echo json_encode(["error" => "Data tidak lengkap"]);
+        return;
+    }
+
+    $stmt = $conn->prepare("UPDATE tempat SET nama_lapangan = ?, alamat = ?, deskripsi = ?, ukuran_lapangan = ?, kapasitas_lapangan = ?, harga = ? WHERE id = ?");
+    $stmt->bind_param("ssssidi", $data['nama_lapangan'], $data['alamat'], $data['deskripsi'], $data['ukuran'], $data['kapasitas'], $data['harga'], $data['id']);
+
+    if ($stmt->execute()) {
+        echo json_encode(["message" => "Lapangan berhasil diperbarui"]);
+    } else {
+        echo json_encode(["error" => "Gagal memperbarui lapangan"]);
+    }
+    $stmt->close();
+}
+
+function deleteField($conn, $id) {
+    $stmt = $conn->prepare("DELETE FROM tempat WHERE id = ?");
+    $stmt->bind_param("i", $id);
+
+    if ($stmt->execute()) {
+        echo json_encode(["message" => "Lapangan berhasil dihapus"]);
+    } else {
+        echo json_encode(["error" => "Gagal menghapus lapangan"]);
+    }
+    $stmt->close();
+}
+
+$method = $_SERVER['REQUEST_METHOD'];
+
+switch ($method) {
+    case 'GET':
+        if (isset($_GET['id'])) {
+            getFieldById($conn, $_GET['id']);
+        } else {
+            showAllFields($conn);
+        }
+        break;
+    case 'POST':
+        addField($conn);
+        break;
+    case 'PUT':
+        editField($conn);
+        break;
+    case 'DELETE':
+        if (isset($_GET['id'])) {
+            deleteField($conn, $_GET['id']);
+        } else {
+            echo json_encode(["error" => "ID diperlukan untuk menghapus lapangan"]);
+        }
+        break;
+    default:
+        echo json_encode(["error" => "Metode tidak didukung"]);
+        break;
+}
+
 $conn->close();
-
-
-
-// Fungsi untuk menampilkan menu
-// function showMenu() {
-//     echo "\n=== Manajemen Lapangan ===\n";
-//     echo "1. Tambah Lapangan\n";
-//     echo "2. Edit Lapangan\n";
-//     echo "3. Hapus Lapangan\n";
-//     echo "4. Lihat Semua Lapangan\n";
-//     echo "5. Keluar\n";
-//     echo "Pilih opsi: ";
-// }
-
-// Fungsi untuk menampilkan semua lapangan
-// function showAllFields($conn) {
-//     $result = $conn->query("SELECT * FROM tempat");
-//     if ($result->num_rows > 0) {
-//         while ($row = $result->fetch_assoc()) {
-//             echo "ID: {$row['id']}\n";
-//             echo "Nama Lapangan: {$row['nama_lapangan']}\n";
-//             echo "Alamat: {$row['alamat']}\n";
-//             echo "Deskripsi: {$row['deskripsi']}\n";
-//             echo "Ukuran: {$row['ukuran_lapangan']}\n";
-//             echo "Kapasitas: {$row['kapasitas_lapangan']}\n";
-//             echo "Harga: Rp" . number_format($row['harga'], 2) . "\n";
-//             echo "----------------------------------\n";
-//         }
-//     } else {
-//         echo "Tidak ada data lapangan.\n";
-//     }
-// }
-
-// Fungsi untuk menambah lapangan
-// function addField($conn) {
-//     $nama = readInput("Masukkan nama lapangan: ");
-//     $alamat = readInput("Masukkan alamat lapangan: ");
-//     $deskripsi = readInput("Masukkan deskripsi lapangan: ");
-//     $ukuran = readInput("Masukkan ukuran lapangan (contoh: 20x40 meter): ");
-//     $kapasitas = (int)readInput("Masukkan kapasitas lapangan: ");
-//     $harga = (float)readInput("Masukkan harga per jam: ");
-
-//     $sql = "INSERT INTO tempat (nama_lapangan, alamat, deskripsi, ukuran_lapangan, kapasitas_lapangan, harga) 
-//             VALUES (?, ?, ?, ?, ?, ?)";
-//     $stmt = $conn->prepare($sql);
-//     $stmt->bind_param("ssssid", $nama, $alamat, $deskripsi, $ukuran, $kapasitas, $harga);
-
-//     if ($stmt->execute()) {
-//         echo "Lapangan berhasil ditambahkan!\n";
-//     } else {
-//         echo "Error: " . $stmt->error . "\n";
-//     }
-//     $stmt->close();
-// }
-
-// Fungsi untuk mengedit lapangan
-// function editField($conn) {
-//     $id = (int)readInput("Masukkan ID lapangan yang akan diubah: ");
-    
-//     // Periksa apakah ID lapangan ada di database
-//     $result = $conn->query("SELECT * FROM tempat WHERE id = $id");
-//     if ($result->num_rows === 0) {
-//         echo "Lapangan dengan ID $id tidak ditemukan.\n";
-//         return;
-//     }
-    
-//     // Ambil data lama
-//     $oldData = $result->fetch_assoc();
-//     echo "=== Data Lama ===\n";
-//     echo "Nama Lapangan: {$oldData['nama_lapangan']}\n";
-//     echo "Alamat: {$oldData['alamat']}\n";
-//     echo "Deskripsi: {$oldData['deskripsi']}\n";
-//     echo "Ukuran: {$oldData['ukuran_lapangan']}\n";
-//     echo "Kapasitas: {$oldData['kapasitas_lapangan']}\n";
-//     echo "Harga: Rp" . number_format($oldData['harga'], 2) . "\n";
-    
-//     // Input data baru (jika kosong, gunakan data lama)
-//     echo "=== Masukkan Data Baru (kosongkan jika tidak ingin mengubah) ===\n";
-//     $nama = readInput("Masukkan nama lapangan baru: ") ?: $oldData['nama_lapangan'];
-//     $alamat = readInput("Masukkan alamat lapangan baru: ") ?: $oldData['alamat'];
-//     $deskripsi = readInput("Masukkan deskripsi lapangan baru: ") ?: $oldData['deskripsi'];
-//     $ukuran = readInput("Masukkan ukuran lapangan baru (contoh: 20x40 meter): ") ?: $oldData['ukuran_lapangan'];
-//     $kapasitas = readInput("Masukkan kapasitas lapangan baru: ") ?: $oldData['kapasitas_lapangan'];
-//     $harga = readInput("Masukkan harga per jam baru: ") ?: $oldData['harga'];
-
-//     // Update data
-//     $sql = "UPDATE tempat SET nama_lapangan = ?, alamat = ?, deskripsi = ?, ukuran_lapangan = ?, harga = ?, kapasitas_lapangan = ?
-//             WHERE id = ?";
-
-//     $stmt = $conn->prepare($sql);
-//     $stmt->bind_param("ssssdii", $nama, $alamat, $deskripsi, $ukuran, $harga, $kapasitas, $id);
-
-//     if ($stmt->execute()) {
-//         echo "Lapangan berhasil diperbarui!\n";
-//     } else {
-//         echo "Error: " . $stmt->error . "\n";
-//     }
-//     $stmt->close();
-// }
-
-
-// // Fungsi untuk menghapus lapangan
-// function deleteField($conn) {
-//     $id = (int)readInput("Masukkan ID lapangan yang akan dihapus: ");
-//     $sql = "DELETE FROM tempat WHERE id = ?";
-//     $stmt = $conn->prepare($sql);
-//     $stmt->bind_param("i", $id);
-
-//     if ($stmt->execute()) {
-//         echo "Lapangan berhasil dihapus!\n";
-//     } else {
-//         echo "Error: " . $stmt->error . "\n";
-//     }
-//     $stmt->close();
-// }
-
-// // Main loop
-// while (true) {
-//     showMenu();
-//     $choice = (int)readInput("");
-
-//     switch ($choice) {
-//         case 1:
-//             addField($conn);
-//             break;
-//         case 2:
-//             editField($conn);
-//             break;
-//         case 3:
-//             deleteField($conn);
-//             break;
-//         case 4:
-//             showAllFields($conn);
-//             break;
-//         case 5:
-//             echo "Keluar dari program.\n";
-//             $conn->close();
-//             exit;
-//         default:
-//             echo "Pilihan tidak valid.\n";
-//     }
-// }
 ?>

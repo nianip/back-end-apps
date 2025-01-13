@@ -1,53 +1,59 @@
 <?php
-$serverName = "localhost";
-$userName= "root";
-$password= "";
-$dbName= "uas";
+$host = "localhost"; 
+$username = "root"; 
+$password = ""; 
+$dbname = "uas"; 
 
-header('Access-Control-Allow-Origin:*');
-header('Access-Control-Allow-Headers:*');
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Headers: *");
 
-// Mendapatkan input JSON dari React Native
-$EndCode = file_get_contents('php://input');
-$DeCode = json_decode($EndCode, true);
-
-$conn = new mysqli($serverName, $userName, $password, $dbName);
+$conn = new mysqli($host, $username, $password, $dbname);
 
 if ($conn->connect_error) {
     die("Koneksi gagal: " . $conn->connect_error);
 }
 
-// Mengambil username dan password dari input JSON
-$idUser = $DeCode['username'] ?? '';
-$passw = $DeCode['password'] ?? '';
-// $idUser = "admin";
-// $passw = "admin";
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $username = $input['username'];
+    $password = $input['password'];
 
-// Query ke database untuk mengecek user
-$sql = "SELECT * FROM users WHERE username = ? AND password = SHA2(?, 256)";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("ss", $idUser, $passw);
-$stmt->execute();
-$result = $stmt->get_result();
-
-$response = [];
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $response[] = [
-            "token" => $row['username'],
-            "role" => $row['role'],
-        ];
+    if (empty($username) || empty($password)) {
+        echo json_encode(["status" => "error", "message" => "Username dan password wajib diisi."]);
+        exit;
     }
+
+    $sql = "SELECT * FROM users WHERE username = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("s", $username);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+
+        if (hash('sha256', $password) === $user['password']) {
+            echo json_encode([
+                "status" => "success",
+                "message" => "Login berhasil.",
+                "data" => [
+                    "id" => $user['id'],
+                    "username" => $user['username'],
+                    "role" => $user['role'],
+                    "created_at" => $user['created_at']
+                ]
+            ]);
+        } else {
+            echo json_encode(["status" => "error", "message" => "Password salah."]);
+        }
+    } else {
+        echo json_encode(["status" => "error", "message" => "Pengguna tidak ditemukan."]);
+    }
+
+    $stmt->close();
 } else {
-    $response[] = [
-        "token" => "",
-        "role" => ""
-    ];
+    echo json_encode(["status" => "error", "message" => "Metode request tidak valid."]);
 }
 
-// Mengembalikan response dalam format JSON
-echo json_encode($response);
-
-$stmt->close();
 $conn->close();
 ?>
